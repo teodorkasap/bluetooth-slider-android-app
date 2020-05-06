@@ -33,6 +33,9 @@ public class MainActivity extends AppCompatActivity {
         simpleSeekBar = (SeekBar) findViewById(R.id.seekBar);
         // listener for changes in seekBar
 
+        final ConnectThread mConnectThread = new ConnectThread(mDevice);
+        mConnectThread.start();
+
         if (mBluetoothAdapter == null) {
 
             Toast.makeText(MainActivity.this, "Device does not support Bluetooth",
@@ -76,11 +79,11 @@ public class MainActivity extends AppCompatActivity {
 
                 Toast.makeText(MainActivity.this, "Seek bar progress is :" + progressChangedValue,
                         Toast.LENGTH_SHORT).show();
+                //Todo: Concert integer to byte and call write(byte[]) function of connected thread
             }
         });
 
-        ConnectThread mConnectThread = new ConnectThread(mDevice);
-        mConnectThread.start();
+
 
     }
 
