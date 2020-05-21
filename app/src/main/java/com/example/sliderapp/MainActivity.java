@@ -5,33 +5,31 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-//import android.os.Handler;
-//import android.os.Message;
-//import android.util.Log;
+import android.util.Log;
 import android.widget.SeekBar;
 import android.widget.Toast;
 
 import java.io.DataOutputStream;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
+import java.lang.reflect.Method;
 import java.util.Set;
-import java.util.UUID;
+
 
 public class MainActivity extends AppCompatActivity {
 
-    SeekBar simpleSeekBar;
-    BluetoothAdapter mBluetoothAdapter;
-    BluetoothDevice mDevice;
+    private SeekBar simpleSeekBar;
+    private BluetoothAdapter mBluetoothAdapter;
+    private BluetoothDevice mDevice;
 
-    private OutputStream os;
+    private DataOutputStream os;
     private InputStream is;
     private BluetoothSocket socket;
 
-    private static final String APP_NAME = "BTLED";
-    private static final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+    private String valString;
 
 
     @Override
@@ -39,11 +37,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
-        // instantiate seekBar
         simpleSeekBar = (SeekBar) findViewById(R.id.seekBar);
-        // listener for changes in seekBar
-
-
 
 
 
@@ -91,47 +85,58 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(MainActivity.this, "Seek bar progress is :" + progressChangedValue,
                         Toast.LENGTH_SHORT).show();
 
-                String val = String.format("%d\n", progressChangedValue);
-                byte[] valBytes = val.getBytes();
-                write(valBytes);
+                valString = String.format("%d\n", progressChangedValue);
+//                byte[] valBytes = val.getBytes();
+
             }
 
-            private void write(byte[] ch) {
 
-                try {
+            BroadcastReceiver discoveryResult = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    String remoteDeviceName = intent.getStringExtra(BluetoothDevice.EXTRA_NAME);
+                    BluetoothDevice remoteDevice;
 
-                    socket.connect();
-                    if (socket.isConnected()){
-                        for (int k = 0; k < ch.length; k++) {
-                            new DataOutputStream(socket.getOutputStream()).writeByte(ch[k]);
-                        }
-                    } else {
-                        System.out.println("no socket connection present...");
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
+                    remoteDevice = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                    Toast.makeText(getApplicationContext(), "Discovered: " + remoteDeviceName +
+                            " address " + remoteDevice.getAddress(), Toast.LENGTH_SHORT).show();
 
-            public void run() {
-                final int BUFFER_SIZE = 1024;
-                byte[] buffer = new byte[BUFFER_SIZE];
-                int bytes = 0;
-                int b = BUFFER_SIZE;
+                    try{
+                        BluetoothDevice device = mBluetoothAdapter.getRemoteDevice(remoteDevice.getAddress());
 
-                while (true){
-                    try {
-                        bytes = socket.getInputStream().read(buffer, bytes, BUFFER_SIZE - bytes);
-                    } catch (IOException e) {
+                        Method m = device.getClass().getMethod("createRfcommSocket", new Class[] {int.class});
+
+                        BluetoothSocket clientSocket =  (BluetoothSocket) m.invoke(device, 1);
+
+                        clientSocket.connect();
+
+                        os = new DataOutputStream(clientSocket.getOutputStream());
+
+                        new clientSock().start();
+                    } catch (Exception e) {
                         e.printStackTrace();
+                        Log.e("BLUETOOTH", e.getMessage());
                     }
+
                 }
-            }
+            };
 
         });
 
 
 
+    }
+
+    public class clientSock extends Thread {
+        public void run() {
+            try {
+                os.writeBytes(valString); // anything you want
+                os.flush();
+            } catch (Exception e1) {
+                e1.printStackTrace();
+                return;
+            }
+        }
     }
 
 
