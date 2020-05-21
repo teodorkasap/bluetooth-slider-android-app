@@ -7,11 +7,13 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.content.Intent;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Message;
+//import android.os.Handler;
+//import android.os.Message;
+//import android.util.Log;
 import android.widget.SeekBar;
 import android.widget.Toast;
 
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -24,6 +26,14 @@ public class MainActivity extends AppCompatActivity {
     BluetoothAdapter mBluetoothAdapter;
     BluetoothDevice mDevice;
 
+    private OutputStream os;
+    private InputStream is;
+    private BluetoothSocket socket;
+
+    private static final String APP_NAME = "BTLED";
+    private static final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB");
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -33,8 +43,9 @@ public class MainActivity extends AppCompatActivity {
         simpleSeekBar = (SeekBar) findViewById(R.id.seekBar);
         // listener for changes in seekBar
 
-        final ConnectThread mConnectThread = new ConnectThread(mDevice);
-        mConnectThread.start();
+
+
+
 
         if (mBluetoothAdapter == null) {
 
@@ -79,123 +90,49 @@ public class MainActivity extends AppCompatActivity {
 
                 Toast.makeText(MainActivity.this, "Seek bar progress is :" + progressChangedValue,
                         Toast.LENGTH_SHORT).show();
-                //Todo: Concert integer to byte and call write(byte[]) function of connected thread
+
+                String val = String.format("%d\n", progressChangedValue);
+                byte[] valBytes = val.getBytes();
+                write(valBytes);
             }
+
+            private void write(byte[] ch) {
+
+                try {
+
+                    socket.connect();
+                    if (socket.isConnected()){
+                        for (int k = 0; k < ch.length; k++) {
+                            new DataOutputStream(socket.getOutputStream()).writeByte(ch[k]);
+                        }
+                    } else {
+                        System.out.println("no socket connection present...");
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            public void run() {
+                final int BUFFER_SIZE = 1024;
+                byte[] buffer = new byte[BUFFER_SIZE];
+                int bytes = 0;
+                int b = BUFFER_SIZE;
+
+                while (true){
+                    try {
+                        bytes = socket.getInputStream().read(buffer, bytes, BUFFER_SIZE - bytes);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            }
+
         });
 
 
 
     }
 
-    private class ConnectThread extends Thread {
-        private final BluetoothSocket mmSocket;
-        private final BluetoothDevice mmDevice;
-        private final UUID MY_UUID = UUID.fromString("00001101-0000-1000-8000-00805f9b34fb");
 
-        public ConnectThread(BluetoothDevice device) {
-            BluetoothSocket tmp = null;
-            mmDevice = device;
-            try {
-                tmp = device.createRfcommSocketToServiceRecord(MY_UUID);
-            } catch (IOException e) {
-
-            }
-            mmSocket = tmp;
-        }
-
-        public void run() {
-            mBluetoothAdapter.cancelDiscovery();
-            try {
-                mmSocket.connect();
-            } catch (IOException connectException) {
-                try {
-                    mmSocket.close();
-                } catch (IOException closeException) {
-
-                }
-                return;
-            }
-            ConnectedThread mConnectedThread = new ConnectedThread(mmSocket);
-            mConnectedThread.start();
-        }
-
-        public void cancel() {
-            try {
-                mmSocket.close();
-            } catch (IOException e) {
-
-            }
-        }
-    }
-
-    private class ConnectedThread extends Thread {
-        private final BluetoothSocket mmSocket;
-        private final InputStream mmInStream;
-        private final OutputStream mmOutStream;
-
-        public ConnectedThread(BluetoothSocket socket) {
-            mmSocket = socket;
-            InputStream tmpIn = null;
-            OutputStream tmpOut = null;
-            try {
-                tmpIn = socket.getInputStream();
-                tmpOut = socket.getOutputStream();
-            } catch (IOException e) {
-            }
-            mmInStream = tmpIn;
-            mmOutStream = tmpOut;
-        }
-
-        public void run() {
-            byte[] buffer = new byte[1024];
-            int begin = 0;
-            int bytes = 0;
-            while (true) {
-                try {
-                    bytes += mmInStream.read(buffer, bytes, buffer.length - bytes);
-                    for (int i = begin; i < bytes; i++) {
-                        if (buffer[i] == "#".getBytes()[0]) {
-                            mHandler.obtainMessage(1, begin, i, buffer).sendToTarget();
-                            begin = i + 1;
-                            if (i == bytes - 1) {
-                                bytes = 0;
-                                begin = 0;
-                            }
-                        }
-                    }
-                } catch (IOException e) {
-                    break;
-                }
-            }
-        }
-
-        public void write(byte[] bytes) {
-            try {
-                mmOutStream.write(bytes);
-            } catch (IOException e) {
-            }
-        }
-
-        public void cancel() {
-            try {
-                mmSocket.close();
-            } catch (IOException e) {
-            }
-        }
-    }
-
-    Handler mHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            byte[] writeBuf = (byte[]) msg.obj;
-            int begin = (int) msg.arg1;
-            int end = (int) msg.arg2;
-            switch (msg.what) {
-                case 1:
-                    String writeMessage = new String(writeBuf);
-                    writeMessage = writeMessage.substring(begin, end);
-                    break;
-            }
-        }
-    };
 }
